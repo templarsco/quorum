@@ -1,0 +1,17 @@
+# deps / build
+node_modules/
+dist/
+build/
+target/
+
+# secrets / local
+.env
+.env.*
+*.sqlite*
+
+# tooling session state (not part of the product)
+.overclock-app/
+.remember/
+
+# internal planning docs — kept private (see quorum-internal), never in the public repo
+docs/
