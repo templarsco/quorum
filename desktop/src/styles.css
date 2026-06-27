@@ -1,0 +1,167 @@
+:root {
+  --bg: #0e1116;
+  --panel: #161b22;
+  --border: #232a33;
+  --text: #e6edf3;
+  --muted: #8b949e;
+  --human: #2f81f7;
+  --orch: #d2a8ff;
+  --claude: #e3a008;
+  --copilot: #3fb950;
+  --danger: #f85149;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  font-family: ui-sans-serif, system-ui, "Segoe UI", Roboto, sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+.topbar {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  padding: 12px 18px;
+  border-bottom: 1px solid var(--border);
+}
+
+.brand {
+  font-weight: 800;
+  font-size: 20px;
+  letter-spacing: 0.5px;
+}
+
+.tag {
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.container {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 16px 18px;
+  overflow: hidden;
+}
+
+.task-form {
+  display: flex;
+  gap: 10px;
+}
+
+#task-input {
+  flex: 1;
+  resize: none;
+  background: var(--panel);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 10px 12px;
+  font-size: 14px;
+  font-family: inherit;
+}
+
+#task-input:focus {
+  outline: none;
+  border-color: var(--human);
+}
+
+#run-btn {
+  background: var(--human);
+  color: #fff;
+  border: 0;
+  border-radius: 10px;
+  padding: 0 22px;
+  font-weight: 700;
+  font-size: 14px;
+  cursor: pointer;
+}
+
+#run-btn:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.feed {
+  flex: 1;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding-right: 6px;
+}
+
+.bubble {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--muted);
+  border-radius: 8px;
+  padding: 8px 12px;
+}
+
+.bubble .who {
+  font-size: 11px;
+  color: var(--muted);
+  margin-bottom: 3px;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+}
+
+.bubble .text {
+  white-space: pre-wrap;
+  font-size: 14px;
+  line-height: 1.45;
+}
+
+.bubble.human {
+  border-left-color: var(--human);
+}
+.bubble.orchestrator {
+  border-left-color: var(--orch);
+}
+.bubble.worker-claude {
+  border-left-color: var(--claude);
+}
+.bubble.worker-copilot {
+  border-left-color: var(--copilot);
+}
+
+.result {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 14px 16px;
+  max-height: 38vh;
+  overflow-y: auto;
+}
+
+.result.hidden {
+  display: none;
+}
+
+.result.error {
+  border-color: var(--danger);
+}
+
+.result-label {
+  font-size: 11px;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-bottom: 6px;
+}
+
+.result-text {
+  white-space: pre-wrap;
+  font-size: 14px;
+  line-height: 1.5;
+}
