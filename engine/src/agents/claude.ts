@@ -39,11 +39,13 @@ export class ClaudeAdapter implements AgentAdapter {
 
   async send(handle: AgentHandle, prompt: string): Promise<void> {
     const cb = this.cbs.get(handle.agentId)
-    const cp = spawn("claude", ["-p", prompt, "--model", this.model, "--output-format", "stream-json", "--verbose"], {
+    // Prompt via stdin (not argv) to avoid the OS arg-length limit on large prompts.
+    const cp = spawn("claude", ["-p", "--model", this.model, "--output-format", "stream-json", "--verbose"], {
       shell: false,
     })
     this.procs.set(handle.agentId, cp)
-    cp.stdin.end() // close stdin so `claude -p` doesn't wait ~3s for piped input
+    cp.stdin.write(prompt)
+    cp.stdin.end()
     cb?.({ agentId: handle.agentId, type: "started" })
     const rl = createInterface({ input: cp.stdout })
     rl.on("line", (line) => {

@@ -25,9 +25,11 @@ export class ClaudeCliLLM implements LLM {
   constructor(private runner: Runner = execRunner, private model = "claude-opus-4-8") {}
 
   async complete(prompt: string, opts?: { system?: string }): Promise<string> {
-    const args = ["-p", prompt, "--model", this.model]
+    // Prompt goes via stdin, not argv — large prompts (e.g. consolidation) blow past the
+    // OS command-line length limit (~32k chars on Windows -> spawn ENAMETOOLONG).
+    const args = ["-p", "--model", this.model]
     if (opts?.system) args.push("--append-system-prompt", opts.system)
-    const { stdout } = await this.runner("claude", args)
+    const { stdout } = await this.runner("claude", args, prompt)
     return stdout.trim()
   }
 }
