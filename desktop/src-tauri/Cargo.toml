@@ -1,6 +1,6 @@
 [package]
 name = "quorum"
-version = "0.1.0"
+version = "0.2.0"
 description = "Quorum multi-agent IDE"
 authors = ["Templars Co"]
 edition = "2021"

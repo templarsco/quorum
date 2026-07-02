@@ -27,7 +27,7 @@ const edgeSchema = z.object({
 const roleSchema = z.enum(["orchestrator", "scout", "builder", "reviewer", "executor"])
 
 export function buildQuorumMcpServer(svc: QuorumServices): McpServer {
-  const server = new McpServer({ name: "quorum", version: "0.1.0" })
+  const server = new McpServer({ name: "quorum", version: "0.2.0" })
 
   server.tool(
     "quorum_post",

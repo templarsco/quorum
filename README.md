@@ -10,21 +10,26 @@ model families** (model diversity is a feature), coordinates them over an
 with a configurable language boundary (talk to it in your language; agents
 collaborate internally in English for efficiency).
 
-**Status:** v0.1 — a working "walking skeleton". Built engine-first; the visual
-shell targets **[CodeSurf](https://github.com/jasonkneen/codesurf)** (canvas +
+**Status:** v0.2 — engine feature-complete for the CodeSurf integration. The
+squad ↔ group protocol, threads/handoffs, workflow runtime, git layer, and four
+real adapters (Claude, Copilot, Codex, Gemini) are implemented and tested; the
+visual shell targets **[CodeSurf](https://github.com/jasonkneen/codesurf)** (canvas +
 groups) with chat UX inspired by **[Synara](https://github.com/Emanuele-web04/synara)**
 (handoffs, threads, @mentions). See [CodeSurf integration spec](#codesurf-integration-spec) below.
 
 Full vision → [docs/VISION.md](docs/VISION.md)
 
-## What works today (v0.1)
+## What works today (v0.2)
 
 - **Orchestrator** — takes a task in your language, decomposes it, delegates, consolidates, and replies in your language.
-- **Two real adapters** — Claude Code (headless `claude -p` stream-json) and Copilot CLI (headless `copilot -p`, GPT-5.5).
+- **Four real adapters** — Claude Code (`claude -p` stream-json), Copilot CLI (`copilot -p`, GPT-5.5), Codex (`codex exec --json`), Gemini (`gemini -p`); auto-detected from PATH, fail-soft (a broken CLI never hangs the mission).
 - **Event-driven bus** — agents wake each other by events, not polling (no "one finishes and the other sits idle").
+- **Squad protocol** — `squad_spawn`/`squad_ack`/`squad_update` + mission registry: the engine drives CodeSurf groups 1:1 (squad↔group, agent↔block), scale 1→250 agents, PR-style `mission_fork`.
 - **Language boundary** — your language ⇄ English, translated on display only; agents collaborate in English internally.
-- **Agent Lounge** — Slack/Devin-style agent chat: `delegate`, `done`, `ack`, `@mentions` between terminals.
-- **MCP server** — `quorum_inbox`, `quorum_post`, `quorum_web_fetch`, `quorum_effort_plan`, … for Claude/Copilot terminals.
+- **Agent Lounge** — Slack/Devin-style agent chat: `delegate`, `done`, `ack`, `@mentions`, threads, Synara-style handoffs with context packs, `@squad:` fan-out.
+- **MCP server** — 19 tools: inbox/post/delegate/done/ack, squad spawn/ack/update/list, studio paste, mission fork, handoff/thread, worktree/diff card, effort plan, web fetch/search.
+- **Workflow runtime** — dynamic phases with concurrency caps, harness checkpoints, resumable failures (ultracode-style sweeps over 500 files).
+- **Git layer** — one worktree per agent (`quorum/<agentId>` branches) + Synara-style diff cards (+ins −del per file).
 - **Effort router** — auto-picks `ultrathink` vs `ultracode` vs standard effort from task complexity.
 - **SQLite** persistence of the whole conversation.
 
@@ -64,13 +69,15 @@ engine/                 # TypeScript orchestration engine (runs standalone)
   src/
     orchestrator/       # task intake, decomposition, delegation, consolidation
     bus/                # event-driven message bus (no polling)
-    lounge/             # Agent Lounge — delegate, done, ack, @mentions (Slack/Devin)
+    squad/              # squad <-> CodeSurf group protocol, mission registry, role templates
+    lounge/             # Agent Lounge — delegate, done, ack, @mentions, threads, handoffs
     automations/        # Devin/Cursor-style triggers → missions
-    workspace/          # Multi-agent workspace, harness, roster
+    workspace/          # Multi-agent workspace, harness, roster + dynamic workflow runtime
     effort/             # ultrathink vs ultracode router (+ gstack skill hints)
     knowledge/          # web_fetch / web_search (OpenClaw-style scout)
+    git/                # worktree per agent + diff cards (Synara/Orca pattern)
     mcp/                # MCP stdio server for CodeSurf / Claude / Copilot
-    agents/             # adapters: claude, copilot (+ fake for tests)
+    agents/             # adapters: claude, copilot, codex, gemini (+ fake for tests)
     llm/                # LLM interface (Claude CLI-backed)
     i18n/               # language boundary (your language <-> English)
     store/              # SQLite persistence
@@ -78,13 +85,13 @@ engine/                 # TypeScript orchestration engine (runs standalone)
 
 ## Roadmap
 
-1. **CodeSurf integration** — Squad ↔ Group protocol, MCP bridge, Studio mode (this spec).
+1. **CodeSurf integration** — engine side ✅ (squad protocol, MCP bridge, `studio_paste`); canvas UI adapter lives in the AGPL desktop repo.
 2. **Automations UI** — create/edit automations in CodeSurf (parity with Cursor Automations editor).
 3. **Multi-Agent Workspace UI** — roster toggle, harness todos, diff cards (Cursor screenshots).
-4. **More adapters** — Codex, Gemini, Cursor / Azure AI Foundry (Synara-style provider matrix + Copilot).
-5. **Dynamic workflow runtime** — Claude `/workflows`-style phases + script executor.
-6. **Knowledge MCP** — OpenClaw-style `web_fetch` / `web_search` for scout agents.
-7. **Git layer** — worktrees per agent, diff/PR (Synara patterns).
+4. **More adapters** — ✅ Codex, Gemini (auto-detected); next: Cursor / Azure AI Foundry.
+5. **Dynamic workflow runtime** — ✅ `workspace/runtime.ts` (phases, concurrency caps, checkpoints, resume).
+6. **Knowledge MCP** — ✅ OpenClaw-style `web_fetch` / `web_search` for scout agents.
+7. **Git layer** — ✅ worktrees per agent + diff cards; next: PR creation flows.
 
 ---
 
@@ -160,7 +167,7 @@ Lounge (`delegate` → `done` → `ack`), not one shared context window.
 | `web_search` | `knowledge.webSearch` | scout, piloto — multi-angle research |
 | cache | `cacheTtlMinutes: 15` | avoid repeat fetches |
 
-Future MCP: `quorum_web_fetch`, `quorum_web_search` — cross-check like Claude
+MCP: `quorum_web_fetch`, `quorum_web_search` — cross-check like Claude
 `/deep-research` before piloto merges results.
 
 ### One workspace in CodeSurf
@@ -184,10 +191,11 @@ Workspace: feat-parallel-search
 | Piece | Status |
 |-------|--------|
 | Roster + harness types | ✅ `engine/src/workspace/` |
-| Agent Lounge | ✅ |
+| Agent Lounge (threads, handoffs) | ✅ |
 | Automations | ✅ |
-| Workflow JS runtime | 🔜 |
+| Workflow JS runtime | ✅ `engine/src/workspace/runtime.ts` |
 | web_fetch MCP | ✅ |
+| Git worktrees + diff cards | ✅ `engine/src/git/` |
 | CodeSurf workspace UI | 🔜 |
 
 ---
@@ -567,7 +575,7 @@ sidebar). Behaviour follows [Synara](https://github.com/Emanuele-web04/synara) p
 | **@mention block** | `@terminal:scout-1` or canvas pick — resolves `blockId` → `agentId` |
 | **Thread / handoff** | `meta.threadId`; handoff = new message with `meta.handoff: { from, to, contextPack }` (Synara-style provider switch with shared context) |
 | **Parallel threads** | Multiple `threadId` in same mission; each thread can bind to different adapter |
-| **Provider matrix** | Claude Code, Copilot (GPT-5.5), Codex, Gemini, … via Quorum adapters — Copilot is Quorum-only today |
+| **Provider matrix** | Claude Code, Copilot (GPT-5.5), Codex, Gemini — all four are real adapters today (`agents/registry.ts` auto-detects from PATH) |
 | **Human language** | UI in your language; bus internal lang `en-us` for agent collaboration (existing i18n boundary) |
 
 Mention grammar (regex-friendly):
@@ -661,10 +669,20 @@ Register in `~/.codesurf/mcp-config.json` (see `.quorum/mcp-config.example.json`
 | Tool | Description |
 |------|-------------|
 | `quorum_inbox` | **New messages for you** — delegate, done, ack, @mentions (call every loop) |
-| `quorum_post` | Chat with @mentions on Agent Lounge |
+| `quorum_post` | Chat with @mentions / `@squad:` fan-out / threads on Agent Lounge |
 | `quorum_delegate` | Assign task to another agent |
 | `quorum_done` | Notify peers you finished |
 | `quorum_ack` | "ok, reviewing your progress now" |
+| `quorum_handoff` | Synara-style provider/agent handoff with context pack |
+| `quorum_thread` | Read one thread's messages in order |
+| `quorum_squad_spawn` | Spawn a squad (explicit agents, role list, or default template) |
+| `quorum_squad_ack` | CodeSurf adapter links groupId/blockIds back |
+| `quorum_squad_update` | Scale squad 1→N (add/remove agents, edges) |
+| `quorum_squad_list` | Mission/squad registry with links + status |
+| `quorum_studio_paste` | Inject text into a terminal block PTY (Studio mode) |
+| `quorum_mission_fork` | PR-style mission clone (duplicate squads) |
+| `quorum_worktree` | Create/list/remove per-agent git worktrees |
+| `quorum_diff_card` | +ins −del per file for an agent branch/worktree |
 | `quorum_effort_plan` | Complexity score → ultrathink / ultracode / think / low |
 | `quorum_web_fetch` | Fetch URL (cached 15m, OpenClaw-style) |
 | `quorum_web_search` | DuckDuckGo search for scout agents |
@@ -722,15 +740,18 @@ workspace load (reconcile orphans).
 
 ### Implementation phases
 
-| Phase | Deliverable |
-|-------|-------------|
-| **P0** | MCP server: inbox, post, web, effort | ✅ |
-| **P1** | `squad_spawn` / `squad_ack` — CodeSurf group creation | 🔜 |
-| **P2** | Orchestrator emits dynamic `squad_update`; role templates (scout/builder/reviewer/executor) |
-| **P3** | Chat block: @mentions, threads, Synara-style handoff metadata |
-| **P4** | Studio mode: hover focus, direct paste, suppressed canvas menus |
-| **P5** | Canvas: middle-mouse pan, Ctrl+zoom; workflow edges; status chrome |
-| **P6** | PR-style mission clone (`mission_fork` → duplicate squad groups) |
+| Phase | Deliverable | Engine | CodeSurf UI |
+|-------|-------------|--------|-------------|
+| **P0** | MCP server: inbox, post, web, effort | ✅ | — |
+| **P1** | `squad_spawn` / `squad_ack` — group creation + mission registry | ✅ | 🔜 |
+| **P2** | Dynamic `squad_update`; role templates (scout/builder/reviewer/executor) | ✅ | 🔜 |
+| **P3** | Chat: @mentions grammar, threads, Synara-style handoff metadata | ✅ | 🔜 |
+| **P4** | Studio mode: `studio_paste` inject; hover focus, direct paste | ✅ | 🔜 |
+| **P5** | Workflow edges + status chrome (progress, cost, tokens) | ✅ | 🔜 |
+| **P6** | PR-style mission clone (`mission_fork` → duplicate squad groups) | ✅ | 🔜 |
+
+The engine column ships in this repo (MIT). The CodeSurf UI column lands in the
+AGPL desktop repo that consumes these bus messages/MCP tools.
 
 ### References
 
