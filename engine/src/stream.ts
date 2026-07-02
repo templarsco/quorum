@@ -4,8 +4,8 @@ import { Bus } from "./bus/bus"
 import { MessageStore } from "./store/store"
 import { Translator } from "./i18n/translator"
 import { ClaudeCliLLM } from "./llm/llm"
-import { ClaudeAdapter } from "./agents/claude"
-import { CopilotAdapter } from "./agents/copilot"
+import { detectAdapters } from "./agents/registry"
+import { MissionRegistry, SquadManager } from "./squad/manager"
 import { Orchestrator } from "./orchestrator/orchestrator"
 
 function workspaceRoot(): string {
@@ -31,12 +31,15 @@ async function main(): Promise<void> {
     process.exit(1)
   }
 
-  const store = new MessageStore(join(ensureQuorumDir(), "quorum.db"))
+  const quorumDir = ensureQuorumDir()
+  const store = new MessageStore(join(quorumDir, "quorum.db"))
   const bus = new Bus(store)
   const llm = new ClaudeCliLLM()
   const translator = new Translator(llm)
-  const adapters = { claude: new ClaudeAdapter(), copilot: new CopilotAdapter() }
-  const orch = new Orchestrator(bus, llm, translator, adapters)
+  const adapters = detectAdapters()
+  // Squad protocol on: the desktop/CodeSurf side consumes squad_spawn & friends.
+  const squads = new SquadManager(bus, new MissionRegistry(join(quorumDir, "missions.json")))
+  const orch = new Orchestrator(bus, llm, translator, adapters, { squads })
 
   bus.subscribe(
     () => true,

@@ -2,8 +2,7 @@ import { Bus } from "./bus/bus"
 import { MessageStore } from "./store/store"
 import { Translator } from "./i18n/translator"
 import { ClaudeCliLLM } from "./llm/llm"
-import { ClaudeAdapter } from "./agents/claude"
-import { CopilotAdapter } from "./agents/copilot"
+import { detectAdapters } from "./agents/registry"
 import { Orchestrator } from "./orchestrator/orchestrator"
 
 async function main() {
@@ -17,7 +16,8 @@ async function main() {
   const bus = new Bus(store)
   const llm = new ClaudeCliLLM()
   const translator = new Translator(llm)
-  const adapters = { claude: new ClaudeAdapter(), copilot: new CopilotAdapter() }
+  const adapters = detectAdapters()
+  console.log(`  adapters: ${Object.keys(adapters).join(", ")}`)
   const orch = new Orchestrator(bus, llm, translator, adapters)
 
   // Live mirror of the agent bus (raw en-us traffic; translate-on-display happens at the orchestrator).

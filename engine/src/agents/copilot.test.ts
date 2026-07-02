@@ -25,7 +25,7 @@ test("CopilotAdapter runs `copilot -p` headless and emits a done event with clea
   expect(calls[0]).toContain("--allow-all-tools")
 })
 
-test("CopilotAdapter emits a blocked event when the runner throws", async () => {
+test("CopilotAdapter emits blocked then a converging done when the runner throws", async () => {
   const runner: Runner = async () => {
     throw new Error("copilot missing")
   }
@@ -34,6 +34,7 @@ test("CopilotAdapter emits a blocked event when the runner throws", async () => 
   const events: AgentEvent[] = []
   adapter.onEvent(handle, (e) => events.push(e))
   await adapter.send(handle, "x")
-  expect(events.map((e) => e.type)).toEqual(["started", "blocked"])
+  expect(events.map((e) => e.type)).toEqual(["started", "blocked", "done"])
   expect(events[1].error).toContain("copilot missing")
+  expect(events[2].error).toContain("copilot missing")
 })
