@@ -5,6 +5,7 @@ import type { QuorumServices } from "./services.js"
 import { createServices, effortForTask, inboxForAgent } from "./services.js"
 import type { SquadAgentSpec } from "../squad/types.js"
 import { agentFromRole, defaultSquadAgents } from "../squad/templates.js"
+import { GitLayer } from "../git/worktrees.js"
 
 const agentSpecSchema = z.object({
   agentId: z.string(),
@@ -287,6 +288,55 @@ export function buildQuorumMcpServer(svc: QuorumServices): McpServer {
     async ({ missionId, newMissionId }) => {
       const fork = await svc.squads.fork(missionId, newMissionId)
       return { content: [{ type: "text", text: JSON.stringify(fork, null, 2) }] }
+    },
+  )
+
+  server.tool(
+    "quorum_worktree",
+    "Create/list/remove isolated git worktrees per agent (branch quorum/<agentId>).",
+    {
+      action: z.enum(["create", "list", "remove"]),
+      agentId: z.string().optional().describe("Required for create/remove"),
+      baseRef: z.string().optional().describe("Base ref for create (default HEAD)"),
+    },
+    async ({ action, agentId, baseRef }) => {
+      const git = new GitLayer(svc.workspaceRoot)
+      if (!(await git.isRepo())) {
+        return { content: [{ type: "text", text: "(workspace is not a git repository)" }], isError: true }
+      }
+      if (action === "list") {
+        return { content: [{ type: "text", text: JSON.stringify(await git.list(), null, 2) }] }
+      }
+      if (!agentId) return { content: [{ type: "text", text: "agentId required" }], isError: true }
+      if (action === "create") {
+        const wt = await git.createForAgent(agentId, baseRef)
+        return { content: [{ type: "text", text: JSON.stringify(wt, null, 2) }] }
+      }
+      await git.removeForAgent(agentId, { force: true })
+      return { content: [{ type: "text", text: `worktree for ${agentId} removed` }] }
+    },
+  )
+
+  server.tool(
+    "quorum_diff_card",
+    "Synara-style diff card (+ins −del per file) for an agent worktree/branch or the workspace.",
+    {
+      agentId: z.string().optional(),
+      branch: z.string().optional(),
+      base: z.string().optional().describe("Base ref for branch diffs (default HEAD)"),
+    },
+    async ({ agentId, branch, base }) => {
+      const git = new GitLayer(svc.workspaceRoot)
+      if (!(await git.isRepo())) {
+        return { content: [{ type: "text", text: "(workspace is not a git repository)" }], isError: true }
+      }
+      let cwd: string | undefined
+      if (agentId) {
+        const wt = (await git.list()).find((w) => w.branch === `quorum/${agentId}`)
+        cwd = wt?.path
+      }
+      const card = await git.diffCard({ agentId, branch, base, cwd })
+      return { content: [{ type: "text", text: JSON.stringify(card, null, 2) }] }
     },
   )
 
