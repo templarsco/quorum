@@ -41,11 +41,19 @@ export interface StoredMessage extends Message {
 
 export type AgentEventType = "started" | "progress" | "done" | "blocked"
 
+/** Overclock-style metering extracted from CLI output (when available). */
+export interface AgentUsage {
+  costUsd?: number
+  tokensIn?: number
+  tokensOut?: number
+}
+
 export interface AgentEvent {
   agentId: string
   type: AgentEventType
   text?: string
   error?: string
+  usage?: AgentUsage
 }
 
 export interface AgentHandle {

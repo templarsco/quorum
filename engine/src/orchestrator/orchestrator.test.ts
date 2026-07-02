@@ -1,9 +1,13 @@
 import { expect, test } from "vitest"
+import { mkdtempSync, rmSync } from "node:fs"
+import { tmpdir } from "node:os"
+import { join } from "node:path"
 import { Bus } from "../bus/bus"
 import { FakeLLM } from "../llm/llm"
 import { MessageStore } from "../store/store"
 import { Translator } from "../i18n/translator"
 import { FakeAdapter } from "../agents/fake"
+import { MissionRegistry, SquadManager } from "../squad/manager"
 import { Orchestrator } from "./orchestrator"
 
 function buildLLM() {
@@ -75,4 +79,35 @@ test("a worker that never completes leaves handleTask pending (proves event-driv
     new Promise((r) => setTimeout(() => r("still-pending"), 50)),
   ])
   expect(race).toBe("still-pending")
+})
+
+test("with a SquadManager the mission mirrors as squad_spawn + control edges + status chrome (P2/P5)", async () => {
+  const dir = mkdtempSync(join(tmpdir(), "quorum-orch-"))
+  const store = new MessageStore(":memory:")
+  const bus = new Bus(store)
+  const llm = buildLLM()
+  const registry = new MissionRegistry(join(dir, "missions.json"))
+  const squads = new SquadManager(bus, registry, "main")
+  const orch = new Orchestrator(bus, llm, new Translator(llm), { fake: new FakeAdapter() }, {
+    squads,
+    missionId: "test-mission",
+  })
+
+  await orch.handleTask("faça duas coisas")
+
+  const msgs = store.all()
+  const spawn = msgs.find((m) => m.type === "squad_spawn")
+  expect(spawn).toBeTruthy()
+  const meta = spawn!.meta as any
+  expect(meta.missionId).toBe("test-mission")
+  // piloto chat + 2 workers
+  expect(meta.agents.map((a: any) => a.agentId)).toEqual(["piloto", "fake-1", "fake-2"])
+  expect(meta.edges).toContainEqual({ from: "piloto", to: "fake-1", kind: "control" })
+  // status chrome on worker results
+  const workerResult = msgs.find((m) => m.role === "worker" && m.type === "result")
+  expect((workerResult!.meta as any).squadId).toBe("test-mission-squad")
+  expect((workerResult!.meta as any).status).toBe("done")
+  // registry persisted the squad
+  expect(registry.get("test-mission")?.squads[0].agents.length).toBe(3)
+  rmSync(dir, { recursive: true, force: true })
 })

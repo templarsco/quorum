@@ -17,7 +17,20 @@ export function mapClaudeLine(line: string): Omit<AgentEvent, "agentId"> | null 
     return text ? { type: "progress", text } : null
   }
   if (o.type === "result") {
-    return { type: "done", text: o.result ?? "", error: o.is_error ? (o.result ?? "error") : undefined }
+    const usage =
+      o.total_cost_usd != null || o.usage
+        ? {
+            ...(o.total_cost_usd != null ? { costUsd: o.total_cost_usd } : {}),
+            ...(o.usage?.input_tokens != null ? { tokensIn: o.usage.input_tokens } : {}),
+            ...(o.usage?.output_tokens != null ? { tokensOut: o.usage.output_tokens } : {}),
+          }
+        : undefined
+    return {
+      type: "done",
+      text: o.result ?? "",
+      error: o.is_error ? (o.result ?? "error") : undefined,
+      ...(usage ? { usage } : {}),
+    }
   }
   return null
 }

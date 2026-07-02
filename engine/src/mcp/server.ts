@@ -3,6 +3,27 @@ import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js"
 import { z } from "zod"
 import type { QuorumServices } from "./services.js"
 import { createServices, effortForTask, inboxForAgent } from "./services.js"
+import type { SquadAgentSpec } from "../squad/types.js"
+import { agentFromRole, defaultSquadAgents } from "../squad/templates.js"
+
+const agentSpecSchema = z.object({
+  agentId: z.string(),
+  role: z.string(),
+  adapter: z.string(),
+  blockType: z.enum(["terminal", "chat", "browser"]),
+  model: z.string().optional(),
+  cmd: z.array(z.string()).optional(),
+  env: z.record(z.string()).optional(),
+  pinned: z.boolean().optional(),
+})
+
+const edgeSchema = z.object({
+  from: z.string(),
+  to: z.string(),
+  kind: z.enum(["context", "output", "control"]).optional(),
+})
+
+const roleSchema = z.enum(["orchestrator", "scout", "builder", "reviewer", "executor"])
 
 export function buildQuorumMcpServer(svc: QuorumServices): McpServer {
   const server = new McpServer({ name: "quorum", version: "0.1.0" })
@@ -114,6 +135,129 @@ export function buildQuorumMcpServer(svc: QuorumServices): McpServer {
       if (results.length === 0) return { content: [{ type: "text", text: "(no results)" }] }
       const text = results.map((r, i) => `${i + 1}. ${r.title}\n   ${r.url}`).join("\n\n")
       return { content: [{ type: "text", text }] }
+    },
+  )
+
+  server.tool(
+    "quorum_squad_spawn",
+    "Spawn a squad (CodeSurf block group) for a mission. Provide agents explicitly OR use roles/builders for role templates (scout/builder/reviewer/executor + piloto chat).",
+    {
+      missionId: z.string(),
+      squadId: z.string(),
+      title: z.string().optional(),
+      agents: z.array(agentSpecSchema).optional(),
+      roles: z.array(roleSchema).optional().describe("Spawn one agent per role from templates"),
+      builders: z.number().int().min(1).max(250).optional().describe("Default squad with N builders"),
+      edges: z.array(edgeSchema).optional(),
+    },
+    async ({ missionId, squadId, title, agents, roles, builders, edges }) => {
+      let squadAgents: SquadAgentSpec[]
+      if (agents?.length) {
+        squadAgents = agents as SquadAgentSpec[]
+      } else if (roles?.length) {
+        const counters: Record<string, number> = {}
+        squadAgents = roles.map((r) => {
+          counters[r] = (counters[r] ?? 0) + 1
+          return r === "orchestrator" ? agentFromRole(r, undefined, { agentId: "piloto" }) : agentFromRole(r, counters[r])
+        })
+      } else {
+        squadAgents = defaultSquadAgents({ builders: builders ?? 2 })
+      }
+      const squad = await svc.squads.spawn({
+        missionId,
+        squadId,
+        title,
+        agents: squadAgents,
+        edges: edges ?? [],
+        waitAck: false,
+      })
+      return { content: [{ type: "text", text: JSON.stringify(squad, null, 2) }] }
+    },
+  )
+
+  server.tool(
+    "quorum_squad_ack",
+    "CodeSurf adapter: acknowledge a squad_spawn — link groupId and blockIds back to Quorum.",
+    {
+      missionId: z.string(),
+      squadId: z.string(),
+      groupId: z.string(),
+      blocks: z.array(
+        z.object({
+          agentId: z.string(),
+          blockId: z.string(),
+          blockType: z.enum(["terminal", "chat", "browser"]),
+        }),
+      ),
+    },
+    async ({ missionId, squadId, groupId, blocks }) => {
+      const squad = svc.squads.ack({ missionId, squadId, groupId, blocks })
+      return { content: [{ type: "text", text: JSON.stringify(squad, null, 2) }] }
+    },
+  )
+
+  server.tool(
+    "quorum_squad_update",
+    "Scale a squad dynamically: add/remove agents, add workflow edges (group layout preserved).",
+    {
+      squadId: z.string(),
+      add: z.array(agentSpecSchema).optional(),
+      addRoles: z.array(roleSchema).optional().describe("Add agents from role templates (auto-numbered)"),
+      remove: z.array(z.string()).optional(),
+      edges: z.array(edgeSchema).optional(),
+    },
+    async ({ squadId, add, addRoles, remove, edges }) => {
+      const found = svc.squads.registry.findSquad(squadId)
+      const additions: SquadAgentSpec[] = [...((add as SquadAgentSpec[] | undefined) ?? [])]
+      if (addRoles?.length && found) {
+        for (const r of addRoles) {
+          const existing = found.squad.agents.filter((a) => a.role === r).length + additions.filter((a) => a.role === r).length
+          additions.push(agentFromRole(r, existing + 1))
+        }
+      }
+      const squad = svc.squads.update({ squadId, add: additions, remove, edges })
+      if (!squad) return { content: [{ type: "text", text: `(unknown squad ${squadId})` }], isError: true }
+      return { content: [{ type: "text", text: JSON.stringify(squad, null, 2) }] }
+    },
+  )
+
+  server.tool(
+    "quorum_squad_list",
+    "List missions and squads with groupId/blockId links and status.",
+    {
+      missionId: z.string().optional(),
+    },
+    async ({ missionId }) => {
+      const missions = missionId ? [svc.missions.get(missionId)].filter(Boolean) : svc.missions.list()
+      return { content: [{ type: "text", text: JSON.stringify(missions, null, 2) }] }
+    },
+  )
+
+  server.tool(
+    "quorum_studio_paste",
+    "Inject text into a terminal block PTY (Studio mode). Resolves agentId → blockId when linked.",
+    {
+      agentId: z.string().optional(),
+      blockId: z.string().optional(),
+      text: z.string(),
+      submit: z.boolean().optional().describe("Send Enter after the text"),
+    },
+    async ({ agentId, blockId, text, submit }) => {
+      svc.squads.studioPaste({ agentId, blockId, text, submit })
+      return { content: [{ type: "text", text: "studio_paste posted" }] }
+    },
+  )
+
+  server.tool(
+    "quorum_mission_fork",
+    "PR-style mission clone: duplicate all live squads of a mission under a new missionId.",
+    {
+      missionId: z.string(),
+      newMissionId: z.string().optional(),
+    },
+    async ({ missionId, newMissionId }) => {
+      const fork = await svc.squads.fork(missionId, newMissionId)
+      return { content: [{ type: "text", text: JSON.stringify(fork, null, 2) }] }
     },
   )
 

@@ -5,6 +5,7 @@ import { Lounge } from "../lounge/lounge"
 import { planEffort, type EffortMode, type EffortPlan } from "../effort/router"
 import { KnowledgeWeb } from "../knowledge/web"
 import { MessageStore } from "../store/store"
+import { MissionRegistry, SquadManager } from "../squad/manager"
 import type { StoredMessage } from "../types"
 
 export interface QuorumServices {
@@ -15,6 +16,8 @@ export interface QuorumServices {
   workspaceRoot: string
   knowledge: KnowledgeWeb
   cursors: InboxCursor
+  squads: SquadManager
+  missions: MissionRegistry
 }
 
 export class InboxCursor {
@@ -43,7 +46,9 @@ export function createServices(workspaceRoot: string, channel = "main"): QuorumS
   const lounge = new Lounge(bus, channel)
   const knowledge = new KnowledgeWeb(join(quorumDir, "cache", "web"))
   const cursors = new InboxCursor(join(quorumDir, "cursors"))
-  return { bus, store, lounge, channel, workspaceRoot, knowledge, cursors }
+  const missions = new MissionRegistry(join(quorumDir, "missions.json"))
+  const squads = new SquadManager(bus, missions, channel)
+  return { bus, store, lounge, channel, workspaceRoot, knowledge, cursors, squads, missions }
 }
 
 export function inboxForAgent(svc: QuorumServices, agentId: string): { messages: StoredMessage[]; formatted: string[] } {
