@@ -1,20 +1,28 @@
 {
   "name": "quorum-engine",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "private": true,
   "type": "module",
-  "engines": { "node": ">=20" },
+  "engines": {
+    "node": ">=20"
+  },
   "scripts": {
     "dev": "tsx src/dev.ts",
+    "automations": "tsx src/automations/daemon.ts",
+    "mcp": "tsx src/mcp/stdio.ts",
+    "bundle:desktop": "node scripts/bundle-desktop.mjs",
     "test": "vitest run",
     "test:watch": "vitest"
   },
   "dependencies": {
-    "better-sqlite3": "^11.8.1"
+    "@modelcontextprotocol/sdk": "^1.29.0",
+    "better-sqlite3": "^11.8.1",
+    "zod": "^3.25.76"
   },
   "devDependencies": {
     "@types/better-sqlite3": "^7.6.12",
     "@types/node": "^22.10.0",
+    "esbuild": "^0.25.0",
     "tsx": "^4.19.2",
     "typescript": "^5.7.2",
     "vitest": "^2.1.8"

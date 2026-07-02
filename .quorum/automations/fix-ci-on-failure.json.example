@@ -1,0 +1,18 @@
+{
+  "id": "fix-ci-on-failure",
+  "name": "Auto-fix CI",
+  "description": "Cursor/Devin-style — when CI fails, start a repair mission",
+  "enabled": false,
+  "trigger": {
+    "type": "git",
+    "event": "ci_failed",
+    "repos": ["your-org/your-repo"]
+  },
+  "conditions": [
+    { "field": "branch", "equals": "main" }
+  ],
+  "action": {
+    "type": "start_mission",
+    "prompt": "The CI check failed. Read the logs in trigger context, fix the root cause, and run tests locally."
+  }
+}

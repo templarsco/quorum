@@ -1,0 +1,15 @@
+{
+  "id": "review-when-builder-done",
+  "name": "Review on builder done",
+  "description": "When any builder posts [done], ping reviewer (Agent Lounge + automation)",
+  "enabled": false,
+  "trigger": {
+    "type": "bus",
+    "when": { "type": "done" }
+  },
+  "action": {
+    "type": "message_squad",
+    "text": "Automation: a builder finished — @reviewer-1 please ack and review.",
+    "to": ["reviewer-1", "piloto"]
+  }
+}

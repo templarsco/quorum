@@ -40,11 +40,35 @@ function addBubble(ev) {
   feed.scrollTop = feed.scrollHeight;
 }
 
+function appendStatus(line) {
+  const box = el("#status-log");
+  const row = document.createElement("div");
+  row.className = "status-line";
+  row.textContent = line;
+  box.appendChild(row);
+  if (box.childElementCount > 80) box.removeChild(box.firstElementChild);
+  box.scrollTop = box.scrollHeight;
+}
+
+function setAutomations(on) {
+  el("#auto-dot").classList.toggle("on", on);
+  el("#auto-dot").classList.toggle("off", !on);
+  el("#auto-label").textContent = on ? "Automations running" : "Automations stopped";
+}
+
+function setAgents(mode) {
+  const runningAgents = mode === "running";
+  el("#agent-dot").classList.toggle("on", runningAgents);
+  el("#agent-dot").classList.toggle("off", !runningAgents);
+  el("#agent-label").textContent = runningAgents ? "Agents running" : "Agents idle";
+}
+
 function setRunning(v) {
   running = v;
   const btn = el("#run-btn");
   btn.disabled = v;
   btn.textContent = v ? "Running…" : "Run";
+  setAgents(v ? "running" : "idle");
 }
 
 function showResult(text, isError) {
@@ -54,7 +78,32 @@ function showResult(text, isError) {
   box.classList.toggle("error", !!isError);
 }
 
+async function refreshStatus() {
+  try {
+    const s = await invoke("get_engine_status");
+    setAutomations(!!s.automations_running);
+    setAgents(s.agents_running ? "running" : "idle");
+    if (s.workspace) appendStatus(`workspace → ${s.workspace}`);
+    if (s.quorum_dir) appendStatus(`.quorum → ${s.quorum_dir}`);
+    if (s.mcp_command) appendStatus(`MCP: ${s.mcp_command}`);
+    for (const line of s.log || []) appendStatus(line);
+  } catch (e) {
+    appendStatus(`status error: ${e}`);
+  }
+}
+
 window.addEventListener("DOMContentLoaded", () => {
+  refreshStatus();
+
+  listen("quorum-status", (e) => {
+    appendStatus(String(e.payload));
+  });
+
+  listen("quorum-agents", (e) => {
+    setAgents(String(e.payload));
+    if (String(e.payload) === "idle") setRunning(false);
+  });
+
   listen("quorum-event", (e) => {
     let ev;
     try {
@@ -83,6 +132,9 @@ window.addEventListener("DOMContentLoaded", () => {
     el("#feed").innerHTML = "";
     el("#result").classList.add("hidden");
     setRunning(true);
-    invoke("run_task", { task });
+    invoke("run_task", { task }).catch((err) => {
+      showResult(String(err), true);
+      setRunning(false);
+    });
   });
 });

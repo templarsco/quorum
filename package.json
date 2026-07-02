@@ -1,0 +1,11 @@
+{
+  "name": "quorum",
+  "private": true,
+  "version": "0.2.0",
+  "description": "Quorum multi-agent IDE",
+  "scripts": {
+    "build:engine": "cd engine && npm install && npm run bundle:desktop",
+    "build:win": "npm run build:engine && cd desktop && npm install && npm run tauri build",
+    "dev:desktop": "cd desktop && npm run tauri dev"
+  }
+}

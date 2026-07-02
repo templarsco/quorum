@@ -31,6 +31,8 @@ export class CopilotAdapter implements AgentAdapter {
       cb?.({ agentId: handle.agentId, type: "done", text: stripAnsi(stdout).trim() })
     } catch (e) {
       cb?.({ agentId: handle.agentId, type: "blocked", error: String(e) })
+      // Converge: emit done so the orchestrator's result wait resolves (no hung mission).
+      cb?.({ agentId: handle.agentId, type: "done", text: `copilot failed: ${String(e)}`, error: String(e) })
     }
   }
 

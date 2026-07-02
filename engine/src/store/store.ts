@@ -62,4 +62,9 @@ export class MessageStore {
   all(): StoredMessage[] {
     return (this.db.prepare(`SELECT * FROM messages ORDER BY id`).all() as any[]).map(rowToMsg)
   }
+
+  /** Release the SQLite handle (required on Windows before deleting the db file). */
+  close(): void {
+    this.db.close()
+  }
 }
