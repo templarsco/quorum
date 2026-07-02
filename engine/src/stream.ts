@@ -1,3 +1,5 @@
+import { join } from "node:path"
+import { mkdirSync } from "node:fs"
 import { Bus } from "./bus/bus"
 import { MessageStore } from "./store/store"
 import { Translator } from "./i18n/translator"
@@ -5,6 +7,16 @@ import { ClaudeCliLLM } from "./llm/llm"
 import { ClaudeAdapter } from "./agents/claude"
 import { CopilotAdapter } from "./agents/copilot"
 import { Orchestrator } from "./orchestrator/orchestrator"
+
+function workspaceRoot(): string {
+  return process.env.QUORUM_WORKSPACE?.trim() || process.cwd()
+}
+
+function ensureQuorumDir(): string {
+  const dir = join(workspaceRoot(), ".quorum")
+  mkdirSync(dir, { recursive: true })
+  return dir
+}
 
 // Desktop bridge entry: emits one JSON line per bus message on stdout (for the Tauri
 // UI to render the agents live), then a final {type:"__final__"} line. Task comes via argv.
@@ -19,7 +31,7 @@ async function main(): Promise<void> {
     process.exit(1)
   }
 
-  const store = new MessageStore("quorum.sqlite")
+  const store = new MessageStore(join(ensureQuorumDir(), "quorum.db"))
   const bus = new Bus(store)
   const llm = new ClaudeCliLLM()
   const translator = new Translator(llm)

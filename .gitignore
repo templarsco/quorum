@@ -3,6 +3,7 @@ node_modules/
 dist/
 build/
 target/
+desktop/src-tauri/resources/
 
 # secrets / local
 .env
@@ -15,3 +16,6 @@ target/
 
 # internal planning docs — kept private (see quorum-internal), never in the public repo
 docs/
+
+# CodeSurf base (AGPL-3.0) — kept out of the MIT public repo
+codesurf/

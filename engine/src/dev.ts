@@ -23,7 +23,10 @@ async function main() {
   // Live mirror of the agent bus (raw en-us traffic; translate-on-display happens at the orchestrator).
   bus.subscribe(
     () => true,
-    (m) => console.log(`  [${m.author}/${m.type ?? "chat"}] ${m.text.slice(0, 120)}`),
+    (m) => {
+      const tag = m.type && !["chat", "result", "status"].includes(m.type) ? `[${m.type}] ` : `[${m.type ?? "chat"}] `
+      console.log(`  ${tag}${m.author}: ${m.text.slice(0, 140)}`)
+    },
   )
 
   console.log(`\n> Tarefa: ${task}\n`)

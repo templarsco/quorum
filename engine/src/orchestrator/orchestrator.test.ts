@@ -45,6 +45,9 @@ test("handleTask delegates to workers and returns a pt-br consolidated result", 
   expect(workerResults.every((m) => m.lang === "en-us")).toBe(true)
   // orchestrator's final reply persisted in pt-br
   expect(msgs.find((m) => m.role === "orchestrator" && m.type === "result")?.lang).toBe("pt-br")
+  // Agent Lounge: delegate before work, done after each worker
+  expect(msgs.filter((m) => m.type === "delegate")).toHaveLength(2)
+  expect(msgs.filter((m) => m.type === "done")).toHaveLength(2)
 })
 
 test("a worker that never completes leaves handleTask pending (proves event-driven wait, no fallback timer)", async () => {

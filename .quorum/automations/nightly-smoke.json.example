@@ -1,0 +1,15 @@
+{
+  "id": "nightly-smoke",
+  "name": "Nightly smoke test",
+  "description": "Devin-style scheduled mission — run smoke tests every night at 2am",
+  "enabled": false,
+  "trigger": {
+    "type": "schedule",
+    "cron": "0 2 * * *"
+  },
+  "action": {
+    "type": "start_mission",
+    "prompt": "Run the smoke test suite. Report failures with file paths and suggest fixes."
+  },
+  "maxRunsPerHour": 1
+}

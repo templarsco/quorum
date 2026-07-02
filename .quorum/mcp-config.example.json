@@ -1,0 +1,13 @@
+{
+  "servers": [
+    {
+      "name": "quorum",
+      "command": "node",
+      "args": ["--import", "tsx", "engine/src/mcp/stdio.ts"],
+      "env": {
+        "QUORUM_WORKSPACE": "${workspaceRoot}",
+        "QUORUM_CHANNEL": "main"
+      }
+    }
+  ]
+}

@@ -44,6 +44,35 @@ body {
   font-size: 13px;
 }
 
+.status-bar {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.status-bar .sep {
+  opacity: 0.5;
+}
+
+.dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  display: inline-block;
+}
+
+.dot.on {
+  background: var(--copilot);
+  box-shadow: 0 0 6px var(--copilot);
+}
+
+.dot.off {
+  background: #484f58;
+}
+
 .container {
   flex: 1;
   display: flex;
@@ -89,6 +118,23 @@ body {
 #run-btn:disabled {
   opacity: 0.6;
   cursor: default;
+}
+
+.status-log {
+  max-height: 110px;
+  overflow-y: auto;
+  background: #0a0d11;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 8px 10px;
+  font-family: ui-monospace, "Cascadia Code", Consolas, monospace;
+  font-size: 11px;
+  color: var(--muted);
+}
+
+.status-line {
+  line-height: 1.4;
+  white-space: pre-wrap;
 }
 
 .feed {
