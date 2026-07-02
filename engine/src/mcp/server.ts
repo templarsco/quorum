@@ -30,14 +30,15 @@ export function buildQuorumMcpServer(svc: QuorumServices): McpServer {
 
   server.tool(
     "quorum_post",
-    "Post a message to the Agent Lounge bus (chat, @mentions).",
+    "Post a message to the Agent Lounge bus (chat, @mentions, @squad:id fan-out, threads).",
     {
       author: z.string().describe("Your agent id, e.g. builder-1"),
       text: z.string(),
       to: z.array(z.string()).optional().describe("Direct recipients"),
+      threadId: z.string().optional().describe("Thread this message belongs to"),
     },
-    async ({ author, text, to }) => {
-      const msg = svc.lounge.chat(author, text, { to })
+    async ({ author, text, to, threadId }) => {
+      const msg = svc.lounge.chat(author, text, { to, threadId })
       return { content: [{ type: "text", text: JSON.stringify({ id: msg.id, type: msg.type, text: msg.text }) }] }
     },
   )
@@ -135,6 +136,34 @@ export function buildQuorumMcpServer(svc: QuorumServices): McpServer {
       if (results.length === 0) return { content: [{ type: "text", text: "(no results)" }] }
       const text = results.map((r, i) => `${i + 1}. ${r.title}\n   ${r.url}`).join("\n\n")
       return { content: [{ type: "text", text }] }
+    },
+  )
+
+  server.tool(
+    "quorum_handoff",
+    "Synara-style handoff: transfer a thread to another agent/provider with a packed context.",
+    {
+      from: z.string(),
+      to: z.string(),
+      contextPack: z.string().describe("Compressed context the receiving agent needs to continue"),
+      adapter: z.string().optional().describe("Target adapter, e.g. copilot"),
+      model: z.string().optional(),
+      threadId: z.string().optional(),
+    },
+    async ({ from, to, contextPack, adapter, model, threadId }) => {
+      const msg = svc.lounge.handoff({ from, to, contextPack, adapter, model }, { threadId })
+      return { content: [{ type: "text", text: msg.text }] }
+    },
+  )
+
+  server.tool(
+    "quorum_thread",
+    "Read all messages of a thread in order.",
+    { threadId: z.string() },
+    async ({ threadId }) => {
+      const msgs = svc.lounge.thread(svc.store, threadId)
+      if (!msgs.length) return { content: [{ type: "text", text: "(empty thread)" }] }
+      return { content: [{ type: "text", text: msgs.map((m) => svc.lounge.format(m)).join("\n") }] }
     },
   )
 

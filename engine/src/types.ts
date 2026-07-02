@@ -10,14 +10,36 @@ export type LoungeType =
   | "status"
   | "result"
   | "blocked"
+  | "handoff"
+
+/** Synara-style provider handoff — new agent continues with packed context. */
+export interface HandoffMeta {
+  from: string
+  to: string
+  /** Compressed context the receiving agent needs to continue the thread. */
+  contextPack: string
+  /** Optional adapter/model switch (e.g. claude → copilot). */
+  adapter?: string
+  model?: string
+}
 
 export interface LoungeMeta {
   /** Direct recipients — they get notified even without @ in text. */
   to?: string[]
   /** Parsed @mentions from text. */
   mentions?: string[]
+  /** Squad-wide mentions (@squad:checkout-build) — fan-out to squad members. */
+  squadMentions?: string[]
+  /** Block mentions (@block:cs-blk_…) — resolved to agentId by the UI layer. */
+  blockMentions?: string[]
+  /** Group mentions (@group:cs-grp_…). */
+  groupMentions?: string[]
   /** Message id this replies to (ack / thread). */
   replyTo?: number
+  /** Conversation thread — parallel threads share one mission channel. */
+  threadId?: string
+  /** Synara-style handoff between providers/agents. */
+  handoff?: HandoffMeta
   /** Short summary for done/delegate cards. */
   summary?: string
   /** Task body for delegate messages. */

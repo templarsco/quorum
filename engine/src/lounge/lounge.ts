@@ -1,32 +1,56 @@
 import type { Bus } from "../bus/bus"
-import type { Lang, LoungeMeta, Message, Role, StoredMessage } from "../types"
-import { formatMention, parseMentions } from "./mentions"
+import type { HandoffMeta, Lang, LoungeMeta, Message, Role, StoredMessage } from "../types"
+import { formatMention, parseAllMentions, parseMentions } from "./mentions"
 
 export type LoungeListener = (msg: StoredMessage, formatted: string) => void
 
+/** Resolves squadId → member agentIds (wire to MissionRegistry when available). */
+export type SquadResolver = (squadId: string) => string[]
+
 /** Slack-like layer on the bus — delegate, done, ack, @mentions (Devin-style agent chat). */
 export class Lounge {
+  private squadResolver?: SquadResolver
+
   constructor(
     private bus: Bus,
     private channel = "main",
   ) {}
 
-  /** Free-form chat; @mentions in text are parsed into meta. */
-  chat(author: string, text: string, opts?: { role?: Role; lang?: Lang; to?: string[] }): StoredMessage {
-    const mentions = parseMentions(text)
-    const to = [...new Set([...(opts?.to ?? []), ...mentions])]
+  /** Enable @squad:id fan-out (e.g. `lounge.useSquadResolver(id => registry…)`). */
+  useSquadResolver(resolver: SquadResolver): void {
+    this.squadResolver = resolver
+  }
+
+  /** Free-form chat; @mentions in text are parsed into meta. Supports threads (P3). */
+  chat(
+    author: string,
+    text: string,
+    opts?: { role?: Role; lang?: Lang; to?: string[]; threadId?: string },
+  ): StoredMessage {
+    const parsed = parseAllMentions(text)
+    const squadFanout = this.squadResolver
+      ? parsed.squads.flatMap((s) => this.squadResolver!(s))
+      : []
+    const to = [...new Set([...(opts?.to ?? []), ...parsed.agents, ...squadFanout])].filter((a) => a !== author)
+    const meta: LoungeMeta & Record<string, unknown> = {}
+    if (to.length) meta.to = to
+    if (parsed.agents.length) meta.mentions = parsed.agents
+    if (parsed.squads.length) meta.squadMentions = parsed.squads
+    if (parsed.blocks.length) meta.blockMentions = parsed.blocks
+    if (parsed.groups.length) meta.groupMentions = parsed.groups
+    if (opts?.threadId) meta.threadId = opts.threadId
     return this.post({
       author,
       role: opts?.role ?? "worker",
       lang: opts?.lang ?? "en-us",
       type: "chat",
       text,
-      meta: to.length ? { to, mentions } : mentions.length ? { mentions } : undefined,
+      meta: Object.keys(meta).length ? meta : undefined,
     })
   }
 
   /** Piloto/orchestrator assigns work to a worker — target is notified. */
-  delegate(from: string, to: string, task: string, opts?: { lang?: Lang; role?: Role }): StoredMessage {
+  delegate(from: string, to: string, task: string, opts?: { lang?: Lang; role?: Role; threadId?: string }): StoredMessage {
     const text = `${formatMention(to)} ${from} delegated: ${task}`
     return this.post({
       author: from,
@@ -34,7 +58,13 @@ export class Lounge {
       lang: opts?.lang ?? "en-us",
       type: "delegate",
       text,
-      meta: { to: [to], mentions: [to], task, summary: task.slice(0, 200) },
+      meta: {
+        to: [to],
+        mentions: [to],
+        task,
+        summary: task.slice(0, 200),
+        ...(opts?.threadId ? { threadId: opts.threadId } : {}),
+      },
     })
   }
 
@@ -73,11 +103,47 @@ export class Lounge {
     const meta = msg.meta as LoungeMeta | undefined
     if (meta?.to?.includes(agentId)) return true
     if (meta?.mentions?.includes(agentId)) return true
+    if (meta?.handoff?.to === agentId) return true
+    // @squad:x fan-out when a resolver is wired
+    if (meta?.squadMentions?.length && this.squadResolver) {
+      for (const s of meta.squadMentions) if (this.squadResolver(s).includes(agentId)) return true
+    }
     // Lounge traffic on the channel is visible to all squad agents when broadcast types
     if (msg.type === "delegate" || msg.type === "done" || msg.type === "ack" || msg.type === "chat") {
       if (meta?.to?.includes(agentId) || meta?.mentions?.includes(agentId)) return true
     }
     return parseMentions(msg.text).includes(agentId)
+  }
+
+  /**
+   * Synara-style handoff — transfer a thread to another agent (possibly on a
+   * different provider) with a packed context so it can continue seamlessly.
+   */
+  handoff(
+    handoffMeta: HandoffMeta,
+    opts?: { threadId?: string; lang?: Lang; text?: string },
+  ): StoredMessage {
+    const { from, to, contextPack } = handoffMeta
+    const text =
+      opts?.text ?? `${formatMention(to)} handoff from ${from}: continue this thread. Context: ${contextPack.slice(0, 200)}`
+    return this.post({
+      author: from,
+      role: "worker",
+      lang: opts?.lang ?? "en-us",
+      type: "handoff",
+      text,
+      meta: {
+        to: [to],
+        mentions: [to],
+        handoff: handoffMeta,
+        ...(opts?.threadId ? { threadId: opts.threadId } : {}),
+      },
+    })
+  }
+
+  /** All messages of one thread, in order (thread view). */
+  thread(store: { byChannel(c: string): StoredMessage[] }, threadId: string): StoredMessage[] {
+    return store.byChannel(this.channel).filter((m) => (m.meta as LoungeMeta | undefined)?.threadId === threadId)
   }
 
   /** Human/terminal-friendly one-liner (mission room feed). */

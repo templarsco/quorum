@@ -48,6 +48,8 @@ export function createServices(workspaceRoot: string, channel = "main"): QuorumS
   const cursors = new InboxCursor(join(quorumDir, "cursors"))
   const missions = new MissionRegistry(join(quorumDir, "missions.json"))
   const squads = new SquadManager(bus, missions, channel)
+  // @squad:x mentions fan out to current squad membership
+  lounge.useSquadResolver((squadId) => missions.findSquad(squadId)?.squad.agents.map((a) => a.agentId) ?? [])
   return { bus, store, lounge, channel, workspaceRoot, knowledge, cursors, squads, missions }
 }
 
